@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { diffInspections, selectReviewFindings, type JsonValue } from "@/lib/pczt";
+import { diffInspections, formatInspectionValue, selectReviewFindings, type JsonValue } from "@/lib/pczt";
 
 interface InspectionPayload {
   method: string;
@@ -49,9 +49,11 @@ export function PcztLab() {
     return diffInspections(result.inspection, comparison.inspection);
   }, [result, comparison]);
 
-  const mutationKind = changes.some((entry) => /(address|recipient)/i.test(entry.path))
-    ? "Recipient mutation detected"
-    : `${changes.length} field${changes.length === 1 ? "" : "s"} changed`;
+  const mutationKind = changes.length === 0
+    ? "No decoded changes detected"
+    : changes.some((entry) => /(address|recipient)/i.test(entry.path))
+      ? "Recipient mutation detected"
+      : `${changes.length} field${changes.length === 1 ? "" : "s"} changed`;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -95,6 +97,12 @@ export function PcztLab() {
           <button className={mode === "compare" ? "active" : ""} onClick={() => setMode("compare")} type="button" role="tab" aria-selected={mode === "compare"}>Compare mutations</button>
           <span>NO SIGNING AUTHORITY</span>
         </div>
+
+        <aside className="network-context" aria-label="Network context">
+          <span>SEPARATE NETWORK CONTEXTS</span>
+          <strong>Live dashboard: Zcash mainnet · PCZT inspector: isolated Zebra regtest</strong>
+          <p>Zallet renders a decoded script address with the inspector&apos;s regtest prefix, so a <code>tm…</code> address can appear beside creator-recorded <code>t1…</code> user metadata. That difference alone is not evidence of tampering; Veyrin flags changes only when the same decoded field differs between the expected and returned PCZTs.</p>
+        </aside>
 
         <form className="lab-form" onSubmit={submit}>
           <div className="sample-line">
@@ -146,9 +154,10 @@ export function PcztLab() {
               </div>
               {mode === "compare" ? (
                 <div className="change-list">
-                  {changes.length === 0 ? <p className="no-changes">No decoded field mutations detected.</p> : changes.slice(0, 30).map((entry) => (
-                    <div className="change-row" key={entry.path}>
-                      <code>{entry.path}</code><del>{entry.before}</del><ins>{entry.after}</ins>
+                  <p className="change-count"><strong>{changes.length.toLocaleString()}</strong> total decoded field change{changes.length === 1 ? "" : "s"}</p>
+                  {changes.length === 0 ? <p className="no-changes">The decoded inspections are identical.</p> : changes.map((entry, index) => (
+                    <div className="change-row" key={`${entry.path}-${index}`}>
+                      <code>{entry.path}</code><del>{formatInspectionValue(entry.before)}</del><ins>{formatInspectionValue(entry.after)}</ins>
                     </div>
                   ))}
                 </div>
@@ -159,7 +168,10 @@ export function PcztLab() {
                   )) : <p className="no-changes">Decoded successfully. Open the exact evidence below.</p>}
                 </div>
               )}
-              <details className="raw-evidence"><summary>Exact pczt_inspect response</summary><pre>{JSON.stringify(result.inspection, null, 2)}</pre></details>
+              <details className="raw-evidence"><summary>{mode === "compare" ? "Expected raw pczt_inspect response" : "Exact pczt_inspect response"}</summary><pre>{JSON.stringify(result.inspection, null, 2)}</pre></details>
+              {mode === "compare" && comparison && (
+                <details className="raw-evidence"><summary>Returned raw pczt_inspect response</summary><pre>{JSON.stringify(comparison.inspection, null, 2)}</pre></details>
+              )}
             </>
           )}
         </div>

@@ -136,6 +136,11 @@ button, a, textarea, summary { outline-color: var(--carbon); outline-offset: 4px
 .lab-tabs button { padding: 10px 14px; border: 1px solid transparent; background: transparent; cursor: pointer; font-size: .68rem; }
 .lab-tabs button.active { border-color: var(--ink); border-radius: 999px; background: var(--ink); color: var(--citron); }
 .lab-tabs > span { margin-left: auto; padding-right: 8px; color: var(--muted); font-family: "Courier New", monospace; font-size: .55rem; letter-spacing: .1em; }
+.network-context { grid-column: 1 / -1; padding: 14px clamp(22px, 3.5vw, 46px); border-bottom: 1px solid var(--ink); background: rgb(var(--carbon-rgb) / .04); }
+.network-context > span { display: block; margin-bottom: 5px; color: var(--muted); font-family: "Courier New", monospace; font-size: .55rem; letter-spacing: .1em; }
+.network-context strong { display: block; font-size: .76rem; }
+.network-context p { max-width: 1050px; margin: 7px 0 0; color: var(--muted); font-size: .66rem; line-height: 1.55; }
+.network-context code { color: var(--ink); font-size: inherit; }
 .lab-form, .lab-output { min-width: 0; padding: clamp(22px, 3.5vw, 46px); }
 .lab-form { border-right: 1px solid var(--ink); background: rgb(var(--carbon-rgb) / .04); }
 .sample-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
@@ -173,6 +178,8 @@ button, a, textarea, summary { outline-color: var(--carbon); outline-offset: 4px
 .finding-grid span { display: block; overflow: hidden; color: var(--muted); font-size: .57rem; text-overflow: ellipsis; white-space: nowrap; }
 .finding-grid code { display: block; overflow: hidden; margin-top: 5px; font-size: .66rem; text-overflow: ellipsis; white-space: nowrap; }
 .change-list { border-top: 1px solid var(--line); }
+.change-count { margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .61rem; }
+.change-count strong { color: var(--ink); }
 .change-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: .61rem; }
 .change-row code, .change-row del, .change-row ins { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .change-row del { color: rgb(var(--carbon-rgb) / .5); }

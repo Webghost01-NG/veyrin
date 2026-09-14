@@ -29,8 +29,26 @@ test("diffInspections deterministically exposes a recipient mutation", () => {
 
 test("diffInspections represents added and removed fields without losing empty values", () => {
   assert.deepEqual(diffInspections({ memo: "", fee_zat: 1 }, { privacy_policy: "FullPrivacy", fee_zat: 1 }), [
-    { path: "memo", before: "", after: "∅" },
-    { path: "privacy_policy", before: "∅", after: "FullPrivacy" }
+    { path: "memo", before: "", after: undefined },
+    { path: "privacy_policy", before: undefined, after: "FullPrivacy" }
+  ]);
+});
+
+test("diffInspections preserves a number changing to an equal-looking string", () => {
+  assert.deepEqual(diffInspections({ value_zat: 1 }, { value_zat: "1" }), [
+    { path: "value_zat", before: 1, after: "1" }
+  ]);
+});
+
+test("diffInspections preserves a missing field changing to an empty array", () => {
+  assert.deepEqual(diffInspections({}, { outputs: [] }), [
+    { path: "outputs", before: undefined, after: [] }
+  ]);
+});
+
+test("diffInspections preserves an empty array changing to an empty object", () => {
+  assert.deepEqual(diffInspections({ outputs: [] }, { outputs: {} }), [
+    { path: "outputs", before: [], after: {} }
   ]);
 });
 
