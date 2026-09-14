@@ -46,6 +46,7 @@ The network witness is backed by mainnet QuickNode data. The Intent Lab is backe
 - A provenance-linked public PCZT test vector containing no wallet key material.
 - A second valid PCZT in which only the transparent recipient metadata changes.
 - A visible `Recipient mutation detected` verdict with the old and new addresses.
+- A complete, type-preserving semantic diff with both raw Zallet responses available.
 - Honest upstream errors when a service is unavailable; fabricated fallback data is never shown.
 
 ### Live network evidence
@@ -107,7 +108,7 @@ The Intent Lab has two modes:
 - **Inspect:** Send one base64 PCZT through the allowlisted `pczt_inspect` gateway and surface transaction fields relevant to human review.
 - **Compare mutations:** Inspect an expected envelope and a returned envelope, flatten their decoded structures, and list every field whose value was added, removed, or changed.
 
-The browser independently calculates SHA-256 fingerprints of the exact encoded envelopes. Veyrin highlights fee, value, address, recipient, memo, privacy-policy, pool, proof, input, output, and signature-related paths while retaining the complete raw inspection response for technical review.
+The browser independently calculates SHA-256 fingerprints of the exact encoded envelopes. Veyrin highlights fee, value, address, recipient, memo, privacy-policy, pool, proof, input, output, and signature-related paths while retaining both complete raw inspection responses for technical review. The semantic diff preserves JSON primitive types and container nodes, including empty arrays and objects, and displays every detected change.
 
 `pczt_inspect` describes metadata contained in the PCZT. It is not final cryptographic or consensus verification, which occurs later in the transaction lifecycle.
 
@@ -123,6 +124,8 @@ transparent / outputs / 0 / user_address
 ```
 
 This proves a meaningful transaction-intent change while keeping all wallet and signing material out of the demonstration.
+
+The live dashboard and PCZT inspector use deliberately separate network contexts. Dashboard measurements come from Zcash mainnet. The keyless inspector uses an isolated Zebra regtest chain only to supply the context Zallet requires. Zallet therefore renders decoded transparent scripts with a regtest `tm…` prefix, while a PCZT can also retain creator-recorded mainnet `t1…` user-address metadata. Veyrin shows both, but does not treat that prefix difference alone as tampering; it compares each field against the same field in the other PCZT.
 
 ## Architecture
 
@@ -344,7 +347,7 @@ npm run typecheck
 npm run build
 ```
 
-The automated suite currently covers 12 behaviors:
+The automated suite currently contains 15 tests covering:
 
 - Four-method concurrency with successful data preserved during a partial upstream failure.
 - Honest failure when every node RPC call fails.
@@ -354,6 +357,7 @@ The automated suite currently covers 12 behaviors:
 - The actual Next.js PCZT route's JSON parsing, body limit, server-side authentication, fixed `pczt_inspect` method, success response, and upstream error response.
 - A clean GitHub Actions container build that starts the keyless inspector, waits for readiness, decodes the public PCZT through real Zallet, verifies its recipient, and rejects missing authentication.
 - Deterministic recipient mutation detection, including added, removed, and empty values.
+- Type-preserving diffs for number-to-string changes, missing-to-empty-array changes, and empty-array-to-empty-object changes.
 - Selection of fields that are relevant to human review.
 
 Manual verification covers:
