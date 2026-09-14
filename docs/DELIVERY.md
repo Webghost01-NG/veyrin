@@ -1,5 +1,9 @@
 # Delivery plan
 
+The first four phases are implemented on `feat/production-pczt`. Public release
+is complete only after the Render inspector URL is connected to Vercel and the
+judge path succeeds on `https://veyrin.vercel.app`.
+
 ## Phase 1 — Foundation
 
 - Next.js App Router and TypeScript
@@ -32,11 +36,21 @@ Exit: an authentic PCZT can be inspected and a changed version produces a determ
 
 - Desktop and mobile verification
 - Public deployment
-- Recorded fallback demo
-- Screenshots and submission copy
+- Route-level and semantic-diff automated tests
+- Reproducible screenshots and submission copy
 - RPC evidence and limitations documented
 
 Exit: a judge can open the URL and immediately see live Zcash data, then reproduce the PCZT review flow from the README.
+
+## Release acceptance
+
+1. Public Vercel `pczt_inspect` returns decoded Zallet data instead of `503`.
+2. The provenance-linked Keystone fixture decodes successfully.
+3. The controlled second PCZT decodes successfully and visibly produces the
+   `Recipient mutation detected` verdict with old/new addresses.
+4. The UI and README state that this is creator-intent review, not signing or
+   final consensus validation.
+5. `npm test`, `npm run typecheck`, and `npm run build` pass.
 
 ## Resource policy
 

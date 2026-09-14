@@ -1,8 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-
-type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+import { diffInspections, selectReviewFindings, type JsonValue } from "@/lib/pczt";
 
 interface InspectionPayload {
   method: string;
@@ -10,25 +9,11 @@ interface InspectionPayload {
   inspection: JsonValue;
 }
 
-interface Finding {
-  path: string;
-  value: string;
-}
-
-// Public canonical vector published by AngryDavee/pczt-interop. It contains an
-// empty v5 transaction and no key material; it exists only to verify decoding.
-const publicEmptyVector = "UENaVAEAAAAFis6ctQK0oduWDAAAhQGDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-
-function flatten(value: JsonValue, path: string[] = [], result: Finding[] = []): Finding[] {
-  if (Array.isArray(value)) {
-    value.forEach((item, index) => flatten(item, [...path, String(index)], result));
-  } else if (value !== null && typeof value === "object") {
-    Object.entries(value).forEach(([key, item]) => flatten(item, [...path, key], result));
-  } else {
-    result.push({ path: path.join(" / "), value: String(value) });
-  }
-  return result;
-}
+// Public PCZT transport fixture published by Keystone. It contains no private
+// key material. The second vector changes only the transparent output recipient
+// fields, providing a deterministic tamper-detection demonstration.
+const publicExpectedVector = "UENaVAEAAAAFis6ctQK0oduWDAEAyI0GhQEAAAEAxJUV9imWJJIzMwGTs9VTxEOo1FgzYwGSJJYp9hWVxAAB/////w8AAACgjQYZdqkUAQAAAAAAAAAAAAAAAAAAAAAAAACIrAAAAQEDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWsgICACIWBgIAIgICAgAgAAAAAAAAAAaCNBhl2qRQBAAAAAAAAAAAAAAAAAAAAAAAAAIisAAABI3QxSHh0Z1hZVFBXMko4QmU5MUhYUzc3TUZneDU3cWtIcnZLAAAAAPvC9DAMAfC3gg0A4zR8jaTuYUZ0N2y8RTWdqlT5tUk+AAADAAGuKTXx39iiSu18cN9946Zo63pJsTGYgN3iu9kDGuXYLwAA";
+const publicRecipientMutation = "UENaVAEAAAAFis6ctQK0oduWDAEAyI0GhQEAAAEAxJUV9imWJJIzMwGTs9VTxEOo1FgzYwGSJJYp9hWVxAAB/////w8AAACgjQYZdqkUAQAAAAAAAAAAAAAAAAAAAAAAAACIrAAAAQEDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGf3qhTxd6fgBYxmxyQuCGSIvT0QAAAAAAAAAAAAAAAAAAWsgICACIWBgIAIgICAgAgAAAAAAAAAAaCNBhl2qRRn96oU8Xen4AWMZsckLghkiL09EIisAAABI3QxVE1MSjdrMk40TmFycWs1RmQ1dVVvODJOWFNNYktSZ0NjAAAAAPvC9DAMAfC3gg0A4zR8jaTuYUZ0N2y8RTWdqlT5tUk+AAADAAGuKTXx39iiSu18cN9946Zo63pJsTGYgN3iu9kDGuXYLwAA";
 
 async function digest(value: string) {
   const bytes = new TextEncoder().encode(value.trim());
@@ -57,18 +42,16 @@ export function PcztLab() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const findings = useMemo(() => result ? flatten(result.inspection).filter((entry) =>
-    /(fee|value|amount|address|recipient|memo|privacy|proof|signature|signed|pool|input|output)/i.test(entry.path)
-  ).slice(0, 24) : [], [result]);
+  const findings = useMemo(() => result ? selectReviewFindings(result.inspection) : [], [result]);
 
   const changes = useMemo(() => {
     if (!result || !comparison) return [];
-    const before = new Map(flatten(result.inspection).map((entry) => [entry.path, entry.value]));
-    const after = new Map(flatten(comparison.inspection).map((entry) => [entry.path, entry.value]));
-    return [...new Set([...before.keys(), ...after.keys()])]
-      .filter((path) => before.get(path) !== after.get(path))
-      .map((path) => ({ path, before: before.get(path) || "∅", after: after.get(path) || "∅" }));
+    return diffInspections(result.inspection, comparison.inspection);
   }, [result, comparison]);
+
+  const mutationKind = changes.some((entry) => /(address|recipient)/i.test(entry.path))
+    ? "Recipient mutation detected"
+    : `${changes.length} field${changes.length === 1 ? "" : "s"} changed`;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -108,17 +91,22 @@ export function PcztLab() {
 
       <div className="lab-shell">
         <div className="lab-tabs" role="tablist" aria-label="PCZT tools">
-          <button className={mode === "inspect" ? "active" : ""} onClick={() => setMode("inspect")} type="button">Inspect</button>
-          <button className={mode === "compare" ? "active" : ""} onClick={() => setMode("compare")} type="button">Compare mutations</button>
+          <button className={mode === "inspect" ? "active" : ""} onClick={() => setMode("inspect")} type="button" role="tab" aria-selected={mode === "inspect"}>Inspect</button>
+          <button className={mode === "compare" ? "active" : ""} onClick={() => setMode("compare")} type="button" role="tab" aria-selected={mode === "compare"}>Compare mutations</button>
           <span>NO SIGNING AUTHORITY</span>
         </div>
 
         <form className="lab-form" onSubmit={submit}>
           <div className="sample-line">
-            <button type="button" onClick={() => { setPrimary(publicEmptyVector); setMode("inspect"); }}>
-              Load public PCZT vector
-            </button>
-            <a href="https://github.com/AngryDavee/pczt-interop/blob/main/vectors/empty_v5.json" target="_blank" rel="noreferrer">View provenance ↗</a>
+            <div className="sample-actions">
+              <button type="button" onClick={() => { setPrimary(publicExpectedVector); setReturned(""); setResult(null); setComparison(null); setMode("inspect"); }}>
+                Load inspection demo
+              </button>
+              <button type="button" onClick={() => { setPrimary(publicExpectedVector); setReturned(publicRecipientMutation); setResult(null); setComparison(null); setMode("compare"); }}>
+                Load recipient mutation
+              </button>
+            </div>
+            <a href="https://github.com/KeystoneHQ/keystone-sdk-base/blob/master/packages/ur-registry-zcash/__tests__/ZcashPCZT.test.ts" target="_blank" rel="noreferrer">Public fixture provenance ↗</a>
           </div>
           <label>
             <span>{mode === "compare" ? "01 / EXPECTED PCZT" : "BASE64 PCZT"}</span>
@@ -150,7 +138,7 @@ export function PcztLab() {
             <>
               <div className={`verdict ${dangerousPolicy ? "danger" : ""}`}>
                 <span>{dangerousPolicy ? "PRIVACY ALERT" : mode === "compare" ? "MUTATION VERDICT" : "INSPECTION COMPLETE"}</span>
-                <strong>{mode === "compare" ? `${changes.length} field${changes.length === 1 ? "" : "s"} changed` : privacyPolicy?.value || "Human review required"}</strong>
+                <strong>{mode === "compare" ? mutationKind : privacyPolicy?.value || "Human review required"}</strong>
                 <p>{dangerousPolicy ? "The recorded policy permits material disclosure. Verify the exact commitment before signing." : "Zallet decoded creator-recorded metadata. This is a review aid, not final cryptographic verification."}</p>
               </div>
               <div className="fingerprint-row">

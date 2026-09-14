@@ -1,0 +1,49 @@
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+
+events {
+  worker_connections 128;
+}
+
+http {
+  access_log /dev/stdout;
+  client_body_temp_path /tmp/nginx/client;
+  proxy_temp_path /tmp/nginx/proxy;
+  fastcgi_temp_path /tmp/nginx/fastcgi;
+  uwsgi_temp_path /tmp/nginx/uwsgi;
+  scgi_temp_path /tmp/nginx/scgi;
+  client_max_body_size 2m;
+
+  limit_req_zone $binary_remote_addr zone=rpc_limit:1m rate=5r/s;
+
+  server {
+    listen ${PORT};
+    server_name _;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    location = /healthz {
+      access_log off;
+      default_type application/json;
+      return 200 '{"status":"ready","service":"keyless-pczt-inspector"}';
+    }
+
+    location = / {
+      limit_except POST { deny all; }
+      limit_req zone=rpc_limit burst=10 nodelay;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_pass http://127.0.0.1:28232;
+      proxy_connect_timeout 5s;
+      proxy_read_timeout 45s;
+      proxy_send_timeout 45s;
+    }
+
+    location / {
+      return 404;
+    }
+  }
+}
