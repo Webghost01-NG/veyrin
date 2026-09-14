@@ -15,6 +15,7 @@ cleanup() {
 trap cleanup EXIT
 
 docker run --detach --name "$container" \
+  --cpus="${VEYRIN_SMOKE_CPUS:-0.1}" \
   --memory=512m \
   --env PORT=10000 \
   --env ZALLET_RPC_USER="$rpc_user" \
@@ -22,7 +23,7 @@ docker run --detach --name "$container" \
   --publish "127.0.0.1:${port}:10000" \
   "$image" >/dev/null
 
-for attempt in $(seq 1 120); do
+for attempt in $(seq 1 300); do
   status="$(curl --silent --output "$work_dir/health.json" --write-out '%{http_code}' \
     "http://127.0.0.1:${port}/healthz" || true)"
   if [ "$status" = "200" ]; then
@@ -33,7 +34,7 @@ for attempt in $(seq 1 120); do
     echo "Inspector stopped before becoming ready" >&2
     exit 1
   fi
-  if [ "$attempt" -eq 120 ]; then
+  if [ "$attempt" -eq 300 ]; then
     docker logs "$container"
     echo "Inspector readiness timed out" >&2
     exit 1

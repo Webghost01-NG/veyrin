@@ -7,3 +7,10 @@ index 1ec3745..01b567d 100644
 +    if std::env::var_os("ZALLET_SKIP_PROVING_CACHE_WARMUP").is_none() {
 +        super::methods::spawn_proving_cache_warmer(chain.clone());
 +    }
+diff --git a/zallet-core/src/components/json_rpc/methods.rs b/zallet-core/src/components/json_rpc/methods.rs
+index a2c3921..047c426 100644
+--- a/zallet-core/src/components/json_rpc/methods.rs
++++ b/zallet-core/src/components/json_rpc/methods.rs
+@@ -1212 +1212 @@ impl<C: Chain> RpcServer for RpcImpl<C> {
+-        pczt_inspect::call(self.wallet().await?.params(), pczt)
++        pczt_inspect::call(self.chain.params(), pczt)
