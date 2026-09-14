@@ -1,8 +1,8 @@
 :root {
-  --carbon: #2146ff;
-  --citron: #f4f1e8;
-  --carbon-rgb: 33 70 255;
-  --citron-rgb: 244 241 232;
+  --carbon: #121212;
+  --citron: #f2f0eb;
+  --carbon-rgb: 18 18 18;
+  --citron-rgb: 242 240 235;
   --paper: var(--citron);
   --ink: var(--carbon);
   --muted: rgb(var(--carbon-rgb) / .62);
@@ -26,16 +26,20 @@ button, textarea { font: inherit; }
 button, a, textarea, summary { outline-color: var(--carbon); outline-offset: 4px; }
 
 .site-header {
-  position: absolute;
-  inset: 0 0 auto;
+  position: fixed;
+  inset: 14px 0 auto;
   z-index: 20;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   width: min(1440px, calc(100% - 48px));
   margin: auto;
-  padding: 24px 0;
-  border-bottom: 1px solid var(--line);
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgb(var(--citron-rgb) / .86);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 40px rgb(var(--carbon-rgb) / .08);
 }
 .wordmark { display: inline-flex; align-items: center; gap: 9px; font-size: .72rem; font-weight: 800; letter-spacing: .18em; }
 .wordmark span { display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: .62rem; }
