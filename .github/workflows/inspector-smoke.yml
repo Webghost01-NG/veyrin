@@ -1,0 +1,29 @@
+name: Inspector smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/inspector-smoke.yml"
+      - "scripts/smoke-zallet-inspector.sh"
+      - "services/zallet-inspector/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspector-smoke.yml"
+      - "scripts/smoke-zallet-inspector.sh"
+      - "services/zallet-inspector/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build keyless inspector from pinned sources
+        run: docker build --tag veyrin-zallet-inspector:smoke services/zallet-inspector
+      - name: Inspect the public PCZT through the container edge
+        run: bash scripts/smoke-zallet-inspector.sh veyrin-zallet-inspector:smoke

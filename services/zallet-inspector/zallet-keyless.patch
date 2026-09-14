@@ -1,0 +1,9 @@
+diff --git a/zallet-core/src/components/json_rpc/server.rs b/zallet-core/src/components/json_rpc/server.rs
+index 1ec3745..01b567d 100644
+--- a/zallet-core/src/components/json_rpc/server.rs
++++ b/zallet-core/src/components/json_rpc/server.rs
+@@ -52 +52,3 @@ pub(crate) async fn spawn<C: Chain>(
+-    super::methods::spawn_proving_cache_warmer(chain.clone());
++    if std::env::var_os("ZALLET_SKIP_PROVING_CACHE_WARMUP").is_none() {
++        super::methods::spawn_proving_cache_warmer(chain.clone());
++    }
