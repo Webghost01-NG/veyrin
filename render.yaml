@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: veyrin-zallet-inspector
+    runtime: docker
+    dockerfilePath: ./services/zallet-inspector/Dockerfile
+    dockerContext: ./services/zallet-inspector
+    plan: free
+    region: frankfurt
+    healthCheckPath: /healthz
+    envVars:
+      - key: ZALLET_RPC_USER
+        sync: false
+      - key: ZALLET_RPC_PASSWORD
+        sync: false

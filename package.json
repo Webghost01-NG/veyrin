@@ -2,11 +2,13 @@
   "name": "veyrin",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "See exactly what a Zcash transaction will do before anyone signs it.",
   "scripts": {
     "dev": "NODE_OPTIONS=--max-old-space-size=1536 next dev",
     "build": "NODE_OPTIONS=--max-old-space-size=2048 next build",
     "start": "NODE_OPTIONS=--max-old-space-size=1024 next start",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

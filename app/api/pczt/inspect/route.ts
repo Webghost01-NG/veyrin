@@ -1,19 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { callRpc, RpcError, validateRpcUrl, zalletMethods } from "@/lib/rpc";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { NextRequest, NextResponse } from "next/server.js";
+import { callRpc, RpcError, validateRpcUrl, zalletMethods } from "../../../../lib/rpc.ts";
+import { checkRateLimit } from "../../../../lib/rate-limit.ts";
+import { maxPcztLength, validPcztBase64 } from "../../../../lib/pczt.ts";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const maxPcztLength = 1_500_000;
-
-function validBase64(value: unknown): value is string {
-  return typeof value === "string" &&
-    value.length >= 16 &&
-    value.length <= maxPcztLength &&
-    value.length % 4 === 0 &&
-    /^[A-Za-z0-9+/]+={0,2}$/.test(value);
-}
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as { pczt?: unknown };
     const pczt = typeof body.pczt === "string" ? body.pczt.trim() : body.pczt;
-    if (!validBase64(pczt)) {
+    if (!validPcztBase64(pczt)) {
       throw new RpcError("Enter a valid base64-encoded PCZT", 400);
     }
 
@@ -45,7 +37,7 @@ export async function POST(request: NextRequest) {
         user: process.env.ZALLET_RPC_USER,
         password: process.env.ZALLET_RPC_PASSWORD
       },
-      timeoutMs: 15_000
+      timeoutMs: 45_000
     });
 
     return NextResponse.json({
