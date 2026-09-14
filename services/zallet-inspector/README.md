@@ -12,7 +12,9 @@ authority.
 
 The public edge accepts only `POST /`, applies request-size and rate limits, and
 passes HTTP Basic authentication to Zallet. Zallet and Zebra both listen on
-loopback inside the container. `GET /healthz` contains no chain or wallet data.
+loopback inside the container. The public edge binds during initialization so the
+host can discover its port, while `GET /healthz` returns `503` until a real fixture
+passes `pczt_inspect`. The ready response contains no chain or wallet data.
 
 ## Local proof
 
