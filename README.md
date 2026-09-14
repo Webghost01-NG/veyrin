@@ -311,4 +311,4 @@ To reproduce the web deployment:
 
 ## License
 
-No license has been selected yet. All rights are reserved until the repository owner adds one.
+Veyrin is released under the [MIT License](LICENSE).
