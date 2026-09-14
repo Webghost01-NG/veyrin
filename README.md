@@ -306,7 +306,7 @@ Malformed JSON, invalid base64, oversized input, missing configuration, timeouts
 - RPC endpoints and credentials remain in server-only environment variables.
 - The QuickNode endpoint must use HTTPS.
 - Zallet may use HTTP only when its hostname is explicit loopback: `localhost`, `127.0.0.1`, or `::1`.
-- Network calls time out individually after 15 seconds; PCZT inspection allows 45 seconds so a sleeping hosted inspector can wake without fabricating a fallback.
+- Network calls time out individually after 15 seconds; PCZT inspection allows 150 seconds so a sleeping hosted inspector can wake without fabricating a fallback.
 - PCZT input is base64-validated and length-bounded before forwarding.
 - Public routes have bounded in-memory per-client rate limiting.
 - React renders untrusted inspection values as text; no raw HTML injection is used.
@@ -314,7 +314,7 @@ Malformed JSON, invalid base64, oversized input, missing configuration, timeouts
 - Hosted Zebra and Zallet RPC listeners bind only to container loopback.
 - The hosted edge accepts only `POST /`, applies a 2 MiB body limit and rate limit, and rejects invalid Basic authentication.
 - The container exits for automatic restart if either Zebra or Zallet stops.
-- Startup must mine a two-block ephemeral regtest and successfully run `pczt_inspect` against the public fixture before the edge is started.
+- The public edge binds immediately for host port discovery, but `/healthz` remains unavailable until startup mines a two-block ephemeral regtest and successfully runs `pczt_inspect` against the public fixture.
 
 The in-memory limiter is intentionally lightweight and instance-local. Production provider limits remain the backstop when traffic spans multiple serverless instances.
 

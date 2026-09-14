@@ -109,15 +109,21 @@ EOF
 
 export PORT="${PORT:-10000}"
 envsubst '${PORT}' < /etc/veyrin/nginx.conf.template > "$runtime_dir/nginx.conf"
+rm -f "$runtime_dir/ready.json" "$runtime_dir/ready.json.tmp"
 
 zebra_pid=""
 zallet_pid=""
+nginx_pid=""
 
 shutdown() {
+  if [ -n "$nginx_pid" ]; then kill "$nginx_pid" 2>/dev/null || true; fi
   if [ -n "$zallet_pid" ]; then kill "$zallet_pid" 2>/dev/null || true; fi
   if [ -n "$zebra_pid" ]; then kill "$zebra_pid" 2>/dev/null || true; fi
 }
 trap shutdown INT TERM EXIT
+
+nginx -e /dev/stderr -c "$runtime_dir/nginx.conf" -g 'daemon off;' &
+nginx_pid=$!
 
 zebrad --config "$runtime_dir/zebra.toml" start &
 zebra_pid=$!
@@ -172,13 +178,13 @@ zallet_pid=$!
 
 attempt=0
 readiness_pczt="UENaVAEAAAAFis6ctQK0oduWDAEAyI0GhQEAAAEAxJUV9imWJJIzMwGTs9VTxEOo1FgzYwGSJJYp9hWVxAAB/////w8AAACgjQYZdqkUAQAAAAAAAAAAAAAAAAAAAAAAAACIrAAAAQEDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWsgICACIWBgIAIgICAgAgAAAAAAAAAAaCNBhl2qRQBAAAAAAAAAAAAAAAAAAAAAAAAAIisAAABI3QxSHh0Z1hZVFBXMko4QmU5MUhYUzc3TUZneDU3cWtIcnZLAAAAAPvC9DAMAfC3gg0A4zR8jaTuYUZ0N2y8RTWdqlT5tUk+AAADAAGuKTXx39iiSu18cN9946Zo63pJsTGYgN3iu9kDGuXYLwAA"
-until curl --fail --silent --show-error \
+until curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
   --user "$ZALLET_RPC_USER:$ZALLET_RPC_PASSWORD" \
   --header 'Content-Type: application/json' \
   --data "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"pczt_inspect\",\"params\":[\"$readiness_pczt\"]}" \
   http://127.0.0.1:28232/ | grep -q '"result"'; do
   attempt=$((attempt + 1))
-  if [ "$attempt" -ge 60 ]; then
+  if [ "$attempt" -ge 120 ]; then
     echo "Zallet did not become ready" >&2
     exit 1
   fi
@@ -186,13 +192,17 @@ until curl --fail --silent --show-error \
   sleep 1
 done
 
+printf '%s\n' '{"status":"ready","service":"keyless-pczt-inspector"}' > "$runtime_dir/ready.json.tmp"
+mv "$runtime_dir/ready.json.tmp" "$runtime_dir/ready.json"
 echo "Keyless PCZT inspector ready; no mnemonic, account, or address was generated."
 supervisor_pid=$$
 (
-  while kill -0 "$zebra_pid" 2>/dev/null && kill -0 "$zallet_pid" 2>/dev/null; do
+  while kill -0 "$zebra_pid" 2>/dev/null && \
+    kill -0 "$zallet_pid" 2>/dev/null && \
+    kill -0 "$nginx_pid" 2>/dev/null; do
     sleep 2
   done
   echo "An inspector dependency stopped; restarting the service." >&2
   kill -TERM "$supervisor_pid" 2>/dev/null || true
 ) &
-nginx -e /dev/stderr -c "$runtime_dir/nginx.conf" -g 'daemon off;'
+wait "$nginx_pid"

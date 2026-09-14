@@ -5,7 +5,7 @@ import { maxPcztLength, validPcztBase64 } from "../../../../lib/pczt.ts";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         user: process.env.ZALLET_RPC_USER,
         password: process.env.ZALLET_RPC_PASSWORD
       },
-      timeoutMs: 45_000
+      timeoutMs: 150_000
     });
 
     return NextResponse.json({
