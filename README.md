@@ -106,7 +106,7 @@ QuickNode URLs and Zallet credentials remain server-only. They are never returne
 - Next.js App Router
 - React
 - TypeScript in strict mode
-- Native CSS with a strict carbon-and-citron colour system
+- Native CSS with a strict obsidian-and-ultraviolet colour system
 - Web Crypto API for browser-side SHA-256
 - Node.js `crypto` for server-side observation fingerprints
 - Vercel for the public web and API deployment

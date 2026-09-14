@@ -1,8 +1,8 @@
 :root {
-  --carbon: #0a0d0b;
-  --citron: #dfff45;
-  --carbon-rgb: 10 13 11;
-  --citron-rgb: 223 255 69;
+  --carbon: #0b0c10;
+  --citron: #c5b8ff;
+  --carbon-rgb: 11 12 16;
+  --citron-rgb: 197 184 255;
   --paper: var(--citron);
   --ink: var(--carbon);
   --muted: rgb(var(--carbon-rgb) / .62);
