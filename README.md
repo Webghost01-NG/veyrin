@@ -306,7 +306,7 @@ Malformed JSON, invalid base64, oversized input, missing configuration, timeouts
 - RPC endpoints and credentials remain in server-only environment variables.
 - The QuickNode endpoint must use HTTPS.
 - Zallet may use HTTP only when its hostname is explicit loopback: `localhost`, `127.0.0.1`, or `::1`.
-- Network calls time out individually after 15 seconds; PCZT inspection allows 150 seconds so a sleeping hosted inspector can wake without fabricating a fallback.
+- Network calls time out individually after 15 seconds; PCZT inspection allows 240 seconds end to end so a sleeping hosted inspector can wake and finish a CPU-bound decode without fabricating a fallback.
 - PCZT input is base64-validated and length-bounded before forwarding.
 - Public routes have bounded in-memory per-client rate limiting.
 - React renders untrusted inspection values as text; no raw HTML injection is used.
@@ -317,6 +317,12 @@ Malformed JSON, invalid base64, oversized input, missing configuration, timeouts
 - The public edge binds immediately for host port discovery, but `/healthz` remains unavailable until startup mines a two-block ephemeral regtest and successfully runs `pczt_inspect` against the public fixture.
 
 The in-memory limiter is intentionally lightweight and instance-local. Production provider limits remain the backstop when traffic spans multiple serverless instances.
+
+The hosted image compiles pinned Zallet beta.3 commit `987382f` with a narrow,
+auditable opt-out for its background proving-key warmer. Veyrin's RPC allowlist
+cannot call prove, extract, sign, or broadcast methods, so generating those keys
+only starves inspection on fractional-CPU hosts. The patch does not modify
+`pczt_inspect`; see `services/zallet-inspector/zallet-keyless.patch`.
 
 ## Verification
 
@@ -334,6 +340,7 @@ The automated suite currently covers 12 behaviors:
 - Successful RPC results and normalized upstream JSON-RPC errors.
 - PCZT validation for malformed and oversized input.
 - The actual Next.js PCZT route's JSON parsing, body limit, server-side authentication, fixed `pczt_inspect` method, success response, and upstream error response.
+- A clean GitHub Actions container build that starts the keyless inspector, waits for readiness, decodes the public PCZT through real Zallet, verifies its recipient, and rejects missing authentication.
 - Deterministic recipient mutation detection, including added, removed, and empty values.
 - Selection of fields that are relevant to human review.
 

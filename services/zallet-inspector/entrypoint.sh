@@ -100,7 +100,7 @@ encryption_identity = "/var/lib/veyrin/zallet/identity.txt"
 
 [rpc]
 bind = ["127.0.0.1:28232"]
-timeout = 30
+timeout = 60
 
 [[rpc.auth]]
 user = "$ZALLET_RPC_USER"
@@ -142,13 +142,23 @@ until curl --fail --silent --show-error \
   sleep 1
 done
 
-generate_response="$(curl --fail --silent --show-error \
-  --header 'Content-Type: application/json' \
-  --data '{"jsonrpc":"2.0","id":2,"method":"generate","params":[2]}' \
-  http://127.0.0.1:18232/)"
-case "$generate_response" in
-  *'"error"'*) echo "Zebra could not generate the inspection chain: $generate_response" >&2; exit 1 ;;
-esac
+attempt=0
+while :; do
+  generate_response="$(curl --fail --silent --show-error \
+    --header 'Content-Type: application/json' \
+    --data '{"jsonrpc":"2.0","id":2,"method":"generate","params":[2]}' \
+    http://127.0.0.1:18232/)" || generate_response=""
+  case "$generate_response" in
+    *'"result"'*) break ;;
+  esac
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 60 ]; then
+    echo "Zebra could not generate the inspection chain" >&2
+    exit 1
+  fi
+  kill -0 "$zebra_pid" 2>/dev/null || { echo "Zebra stopped during startup" >&2; exit 1; }
+  sleep 1
+done
 
 attempt=0
 until curl --fail --silent --show-error \
@@ -177,20 +187,26 @@ zallet-zaino --datadir "$zallet_dir" --config "$runtime_dir/zallet.toml" start &
 zallet_pid=$!
 
 attempt=0
-readiness_pczt="UENaVAEAAAAFis6ctQK0oduWDAEAyI0GhQEAAAEAxJUV9imWJJIzMwGTs9VTxEOo1FgzYwGSJJYp9hWVxAAB/////w8AAACgjQYZdqkUAQAAAAAAAAAAAAAAAAAAAAAAAACIrAAAAQEDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWsgICACIWBgIAIgICAgAgAAAAAAAAAAaCNBhl2qRQBAAAAAAAAAAAAAAAAAAAAAAAAAIisAAABI3QxSHh0Z1hZVFBXMko4QmU5MUhYUzc3TUZneDU3cWtIcnZLAAAAAPvC9DAMAfC3gg0A4zR8jaTuYUZ0N2y8RTWdqlT5tUk+AAADAAGuKTXx39iiSu18cN9946Zo63pJsTGYgN3iu9kDGuXYLwAA"
-until curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
-  --user "$ZALLET_RPC_USER:$ZALLET_RPC_PASSWORD" \
-  --header 'Content-Type: application/json' \
-  --data "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"pczt_inspect\",\"params\":[\"$readiness_pczt\"]}" \
-  http://127.0.0.1:28232/ | grep -q '"result"'; do
+until bash -c 'exec 3<>/dev/tcp/127.0.0.1/28232' 2>/dev/null; do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 120 ]; then
-    echo "Zallet did not become ready" >&2
+    echo "Zallet RPC did not begin accepting requests" >&2
     exit 1
   fi
   kill -0 "$zallet_pid" 2>/dev/null || { echo "Zallet stopped during startup" >&2; exit 1; }
   sleep 1
 done
+
+readiness_pczt="UENaVAEAAAAFis6ctQK0oduWDAEAyI0GhQEAAAEAxJUV9imWJJIzMwGTs9VTxEOo1FgzYwGSJJYp9hWVxAAB/////w8AAACgjQYZdqkUAQAAAAAAAAAAAAAAAAAAAAAAAACIrAAAAQEDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWsgICACIWBgIAIgICAgAgAAAAAAAAAAaCNBhl2qRQBAAAAAAAAAAAAAAAAAAAAAAAAAIisAAABI3QxSHh0Z1hZVFBXMko4QmU5MUhYUzc3TUZneDU3cWtIcnZLAAAAAPvC9DAMAfC3gg0A4zR8jaTuYUZ0N2y8RTWdqlT5tUk+AAADAAGuKTXx39iiSu18cN9946Zo63pJsTGYgN3iu9kDGuXYLwAA"
+readiness_response="$(curl --fail --silent --show-error --connect-timeout 2 --max-time 65 \
+  --user "$ZALLET_RPC_USER:$ZALLET_RPC_PASSWORD" \
+  --header 'Content-Type: application/json' \
+  --data "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"pczt_inspect\",\"params\":[\"$readiness_pczt\"]}" \
+  http://127.0.0.1:28232/)" || readiness_response=""
+case "$readiness_response" in
+  *'"result"'*) ;;
+  *) echo "Zallet could not inspect the readiness PCZT" >&2; exit 1 ;;
+esac
 
 printf '%s\n' '{"status":"ready","service":"keyless-pczt-inspector"}' > "$runtime_dir/ready.json.tmp"
 mv "$runtime_dir/ready.json.tmp" "$runtime_dir/ready.json"
