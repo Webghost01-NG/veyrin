@@ -1,74 +1,176 @@
 # Veyrin
 
-**See before you sign.** Veyrin is a keyless review layer for Zcash PCZTs (Partially Created Zcash Transactions). It combines a live network witness with human-readable transaction inspection and before/after mutation detection.
+> See before you sign.
 
-Veyrin never connects to a personal wallet, asks for a seed phrase, or exposes a signing method.
+Veyrin is a keyless safety and review layer for Zcash Partially Created Zcash Transactions (PCZTs). It combines a live Zcash network witness, human-readable PCZT inspection, deterministic intent fingerprints, and before/after mutation detection in one focused application.
 
-## What it does
+**Live application:** [https://veyrin.vercel.app](https://veyrin.vercel.app)
 
-- Displays current Zcash block height, best block hash, difficulty, synchronization progress, mempool size, node version, peer count, and network solution rate.
-- Shows a per-method RPC flight recorder with success state and latency.
-- Hashes each live RPC snapshot into a reproducible SHA-256 evidence fingerprint.
-- Sends a base64 PCZT to Zallet's read-only `pczt_inspect` method.
-- Surfaces recipient, value, fee, pool, privacy-policy, proof, and signature fields.
-- Produces a browser-side SHA-256 intent fingerprint.
-- Compares two inspected PCZTs and lists every decoded field mutation.
-- Includes a provenance-linked public empty PCZT vector for keyless decoder verification; it is labelled as a test vector, never presented as live transaction data.
+**Repository:** [https://github.com/Webghost01-NG/veyrin](https://github.com/Webghost01-NG/veyrin)
 
-## RPC methods
+Veyrin never asks for a seed phrase, imports a spending key, signs a transaction, or broadcasts one.
 
-| Method | Service | Purpose |
+## The problem
+
+PCZTs let multiple tools or people collaborate on a Zcash transaction before it is finalized. That flexibility creates a human-consent problem: an encoded transaction envelope is difficult to understand, and a change made between handoff and signing can be hard to notice.
+
+Veyrin turns that opaque envelope into reviewable evidence:
+
+1. Observe the real Zcash network and prove the application is connected to a node.
+2. Decode creator-recorded PCZT intent using Zallet's read-only inspection RPC.
+3. Fingerprint the original and returned envelopes in the browser.
+4. Reveal decoded field changes before anyone supplies signing authority.
+
+This is deliberately a review boundary, not another wallet.
+
+## Challenge compliance
+
+| Requirement | Implementation | Status |
 | --- | --- | --- |
-| `getblockchaininfo` | Zcash node via QuickNode | Height, best block, difficulty, sync progress |
-| `getnetworkinfo` | Zcash node via QuickNode | Node and protocol version, peers |
-| `getrawmempool` | Zcash node via QuickNode | Current mempool size |
-| `getmininginfo` | Zcash node via QuickNode | Network solution rate |
-| `pczt_inspect` | Zallet v0.1.0-beta.3 | Decode a PCZT without signing it |
+| Landing page | Responsive Next.js interface with a reactive privacy signal | Complete |
+| Connect to a Zcash node | Server-side QuickNode Zcash JSON-RPC integration | Live |
+| Use at least 3 RPC methods | Four live node methods, plus one allowlisted Zallet method | Complete |
+| Display live blockchain data | Height, block hash, difficulty, sync, mempool, peers, version, solution rate | Live |
 
-The public network endpoint is an explicit four-method read-only integration. The Zallet route exposes only `pczt_inspect`; arbitrary RPC forwarding is deliberately impossible.
+The deployed network witness is operational now. The optional hosted Zallet service still needs to be attached before the public deployment can inspect PCZTs; the UI, validation, comparison engine, and `pczt_inspect` gateway are implemented.
+
+## What judges can see immediately
+
+- Current block height and best block hash.
+- Network difficulty and estimated solutions per second.
+- Node version, protocol version, peer count, and synchronization progress.
+- Current mempool transaction count.
+- A four-method RPC flight recorder with individual success state and latency.
+- A SHA-256 fingerprint of every observed live-network snapshot.
+- An Intent Lab for PCZT inspection and decoded before/after comparison.
+- A provenance-linked public empty PCZT test vector containing no wallet key material.
+- Honest upstream errors when a service is unavailable; fabricated fallback data is never shown.
+
+## RPC integrations
+
+| Method | Service | Data or capability used |
+| --- | --- | --- |
+| `getblockchaininfo` | Zcash node through QuickNode | Chain, block height, headers, best block hash, difficulty, verification progress |
+| `getnetworkinfo` | Zcash node through QuickNode | Node build, protocol version, connected peers |
+| `getrawmempool` | Zcash node through QuickNode | Current mempool transaction IDs, reduced to a count |
+| `getmininginfo` | Zcash node through QuickNode | Current network solution rate |
+| `pczt_inspect` | Zallet `v0.1.0-beta.3+` | Read-only decoding of a base64 PCZT |
+
+Both gateways use hard-coded method allowlists. A browser request cannot select or forward an arbitrary RPC method.
+
+## The two experiences
+
+### 1. Live network witness
+
+The browser requests `GET /api/network`. The server calls the four Zcash node methods concurrently, records individual latency and failure information, normalizes the useful values, and returns one evidence snapshot. Partial upstream failure does not erase successful measurements. If every method fails, the route returns an honest `502` error.
+
+Each response receives a server-generated SHA-256 snapshot fingerprint over the observation time, height, best block hash, difficulty, mempool count, and network solution rate. The fingerprint is evidence of exactly what this application observed together; it is not a Zcash consensus commitment.
+
+### 2. PCZT Intent Lab
+
+The Intent Lab has two modes:
+
+- **Inspect:** Send one base64 PCZT through the allowlisted `pczt_inspect` gateway and surface transaction fields relevant to human review.
+- **Compare mutations:** Inspect an expected envelope and a returned envelope, flatten their decoded structures, and list every field whose value was added, removed, or changed.
+
+The browser independently calculates SHA-256 fingerprints of the exact encoded envelopes. Veyrin highlights fee, value, address, recipient, memo, privacy-policy, pool, proof, input, output, and signature-related paths while retaining the complete raw inspection response for technical review.
+
+`pczt_inspect` describes metadata contained in the PCZT. It is not final cryptographic or consensus verification, which occurs later in the transaction lifecycle.
 
 ## Architecture
 
 ```text
 Browser
-  ├─ GET /api/network ────────> QuickNode Zcash RPC
-  │                              ├─ getblockchaininfo
-  │                              ├─ getnetworkinfo
-  │                              ├─ getrawmempool
-  │                              └─ getmininginfo
-  │
-  ├─ POST /api/pczt/inspect ──> loopback/private Zallet beta.3
-  │                              └─ pczt_inspect only
-  │
-  └─ Web Crypto API
-                                 └─ local SHA-256 intent fingerprints
+  |
+  |-- GET /api/network
+  |      `-- Veyrin server-only route
+  |             `-- QuickNode Zcash JSON-RPC
+  |                    |-- getblockchaininfo
+  |                    |-- getnetworkinfo
+  |                    |-- getrawmempool
+  |                    `-- getmininginfo
+  |
+  |-- POST /api/pczt/inspect
+  |      `-- Veyrin server-only route
+  |             `-- private or loopback Zallet beta.3+
+  |                    `-- pczt_inspect only
+  |
+  `-- Web Crypto API
+         `-- local SHA-256 intent fingerprints
 ```
 
-The QuickNode URL and Zallet credentials are server-only variables. They are never included in the client bundle. Zallet should remain on loopback or a private network because its RPC transport is plaintext HTTP.
+QuickNode URLs and Zallet credentials remain server-only. They are never returned by an API route or included in the browser bundle.
+
+## Technology choices
+
+- Next.js App Router
+- React
+- TypeScript in strict mode
+- Native CSS with a strict carbon-and-citron colour system
+- Web Crypto API for browser-side SHA-256
+- Node.js `crypto` for server-side observation fingerprints
+- Vercel for the public web and API deployment
+- QuickNode for remote Zcash mainnet RPC
+- Zallet for read-only PCZT inspection
+
+The application intentionally has no state database and no client-side dependency beyond React. Node memory is capped in the npm scripts to keep local development practical on low-RAM hardware.
+
+## Repository structure
+
+```text
+app/
+  api/network/route.ts       Four-method Zcash network gateway
+  api/pczt/inspect/route.ts  Single-method Zallet inspection gateway
+  globals.css                Complete responsive visual system
+  layout.tsx                 Metadata and document shell
+  page.tsx                   Landing-page composition
+components/
+  NetworkPulse.tsx           Live metrics and RPC flight recorder
+  PcztLab.tsx                PCZT inspection, fingerprints, and semantic diff
+  SignalField.tsx            Pointer-reactive hero visualization
+lib/
+  rate-limit.ts              Bounded in-memory request limiting
+  rpc.ts                     URL validation, allowlists, timeouts, RPC client
+docs/DELIVERY.md             Milestones, phases, and resource policy
+```
 
 ## Run locally
 
-Requirements: Node.js 20.9 or later.
+### Requirements
+
+- Node.js 22.x
+- npm
+- A Zcash QuickNode HTTPS endpoint
+- Optional: Zallet `v0.1.0-beta.3` or later for the Intent Lab
+
+### Installation
 
 ```bash
+git clone https://github.com/Webghost01-NG/veyrin.git
+cd veyrin
 npm install
 cp .env.example .env.local
-npm run dev
 ```
 
-Set this required variable in `.env.local`:
+Add your QuickNode endpoint to `.env.local`:
 
 ```dotenv
 QUICKNODE_ZCASH_URL=https://your-endpoint.zec-mainnet.quiknode.pro/your-token/
 ```
 
-The application opens at `http://localhost:3000`.
+Start the application:
 
-The development process is capped at approximately 1.5 GiB of old-space memory. It does not sync a local mainnet node.
+```bash
+npm run dev
+```
 
-### Optional PCZT inspection
+Open [http://localhost:3000](http://localhost:3000).
 
-Use Zallet `v0.1.0-beta.3` or later, which includes the PCZT RPC methods. Keep its RPC listener on loopback, then configure:
+The development process caps V8 old-space memory at approximately 1.5 GiB. Veyrin uses a remote mainnet node and does not require the development computer to synchronize the Zcash blockchain.
+
+## Optional Zallet configuration
+
+Run Zallet `v0.1.0-beta.3` or later with its RPC listener restricted to loopback or a private network. Then set:
 
 ```dotenv
 ZALLET_RPC_URL=http://127.0.0.1:28232/
@@ -76,7 +178,83 @@ ZALLET_RPC_USER=your-local-rpc-user
 ZALLET_RPC_PASSWORD=your-local-rpc-password
 ```
 
-No mnemonic or spending key is required by Veyrin. Do not enter wallet material into the application.
+Veyrin only needs the `pczt_inspect` RPC. It does not need a mnemonic, spending key, viewing key, or signing permission. Do not paste wallet material into the application or commit it to the repository.
+
+For a hosted deployment, put Zallet behind a private authenticated connection. Do not expose its plaintext RPC listener directly to the public internet.
+
+## Environment variables
+
+| Variable | Required | Scope | Description |
+| --- | --- | --- | --- |
+| `QUICKNODE_ZCASH_URL` | Yes | Server only | Full authenticated QuickNode Zcash endpoint |
+| `ZALLET_RPC_URL` | For PCZT inspection | Server only | HTTPS endpoint, or loopback HTTP during local development |
+| `ZALLET_RPC_USER` | If Zallet requires it | Server only | Basic-auth username |
+| `ZALLET_RPC_PASSWORD` | If Zallet requires it | Server only | Basic-auth password |
+
+Never prefix these variables with `NEXT_PUBLIC_`.
+
+## API behavior
+
+### `GET /api/network`
+
+Returns a current normalized network observation:
+
+```json
+{
+  "source": "Zcash JSON-RPC via QuickNode",
+  "observedAt": "ISO-8601 timestamp",
+  "snapshotFingerprint": "SHA-256 hex digest",
+  "totalLatencyMs": 120,
+  "chain": "main",
+  "height": 3480000,
+  "bestBlockHash": "...",
+  "difficulty": 0,
+  "syncProgress": 1,
+  "nodeVersion": "/Zebra:x.y.z/",
+  "protocolVersion": 0,
+  "peers": 0,
+  "mempoolSize": 0,
+  "networkSolPerSecond": 0,
+  "evidence": []
+}
+```
+
+The numbers above illustrate the response shape only. Veyrin never hardcodes them as production results.
+
+### `POST /api/pczt/inspect`
+
+Request:
+
+```json
+{ "pczt": "base64-encoded-pczt" }
+```
+
+Successful response:
+
+```json
+{
+  "method": "pczt_inspect",
+  "inspectedAt": "ISO-8601 timestamp",
+  "inspection": {}
+}
+```
+
+Malformed JSON, invalid base64, oversized input, missing configuration, timeouts, and upstream RPC failures return distinct non-`200` statuses with concise error messages.
+
+## Security boundary
+
+- No signing, proving, extraction, broadcasting, key import, wallet creation, or wallet-unlock method is exposed.
+- No user-provided RPC method reaches either upstream service.
+- RPC endpoints and credentials remain in server-only environment variables.
+- The QuickNode endpoint must use HTTPS.
+- Zallet may use HTTP only when its hostname is explicit loopback: `localhost`, `127.0.0.1`, or `::1`.
+- Network calls time out after 8 seconds; PCZT inspection times out after 15 seconds.
+- PCZT input is base64-validated and length-bounded before forwarding.
+- Public routes have bounded in-memory per-client rate limiting.
+- React renders untrusted inspection values as text; no raw HTML injection is used.
+- There is no analytics SDK, wallet connector, persistent user database, or key storage.
+
+The in-memory limiter is intentionally lightweight and instance-local. Production provider limits remain the backstop when traffic spans multiple serverless instances.
 
 ## Verification
 
@@ -85,27 +263,52 @@ npm run typecheck
 npm run build
 ```
 
-Manual checks should cover the live RPC evidence, refresh behavior, honest configuration/upstream failures, PCZT validation, inspector output, comparison output, and responsive layouts.
+Manual verification covers:
 
-## Security boundary
+- Live node measurements and all four RPC evidence rows.
+- Refresh behavior and 30-second automatic observations.
+- Partial and total upstream failures.
+- Invalid JSON, invalid base64, oversized PCZT, and unavailable Zallet errors.
+- PCZT findings, fingerprints, raw evidence, and mutation comparisons.
+- Desktop and mobile layouts.
+- Absence of server endpoint secrets from generated browser bundles.
 
-- No signing, proving, extraction, broadcasting, key import, or wallet-unlock RPC is allowed.
-- No user-provided RPC method reaches either upstream service.
-- RPC URLs and credentials remain server-side.
-- Endpoint URLs are required to use HTTPS, except explicit loopback HTTP for local Zallet.
-- RPC calls have bounded timeouts; PCZT request size is bounded.
-- Both public routes apply lightweight, bounded in-memory rate limiting; provider-level limits remain the production backstop.
-- Untrusted inspection content is rendered by React, not injected as HTML.
-- `pczt_inspect` reports creator-recorded metadata; Zallet documents that final cryptographic verification occurs during extraction. Veyrin states this limitation in the interface.
+## Deployment
 
-## Thirty-second explanation
+The public application is deployed on Vercel:
 
-**Technical:** Veyrin is a Next.js safety layer around five real Zcash RPC methods. Four node calls produce a live chain witness and latency ledger. Zallet's `pczt_inspect` decodes unsigned transaction commitments. The browser fingerprints each envelope and semantically diffs two inspections to expose recipient, value, fee, policy, proof, or signature changes—without ever accepting a private key.
+**[Open Veyrin](https://veyrin.vercel.app)**
 
-**Plain language:** A Zcash transaction can pass between people before it is signed. Veyrin opens that unsigned envelope, explains who gets what and what becomes visible, then warns you if anything changed before it came back. It watches the real Zcash network, but it never touches your wallet keys.
+To reproduce the web deployment:
 
-## Current limitations
+1. Import this repository into Vercel.
+2. Keep the detected framework as Next.js.
+3. Add `QUICKNODE_ZCASH_URL` as an encrypted server-side environment variable.
+4. Optionally add the three Zallet variables after a private hosted inspector is available.
+5. Deploy without exposing any value as a `NEXT_PUBLIC_` variable.
 
-- PCZT inspection requires a separately operated Zallet beta.3 service.
-- Inspection describes metadata recorded by the PCZT creator and is not equivalent to final transaction extraction or consensus verification.
+## Thirty-second pitch
+
+**Technical:** Veyrin is a Next.js safety layer around five allowlisted Zcash RPC methods. Four concurrent node calls create a live chain witness and latency ledger. Zallet's `pczt_inspect` decodes unsigned transaction commitments. Browser-side SHA-256 fingerprints and a semantic diff reveal recipient, value, fee, policy, proof, or signature mutations without accepting private keys.
+
+**Plain language:** A Zcash transaction can move between people before it is signed. Veyrin opens that unsigned envelope, explains what is inside, and warns you if anything changed when it came back. It also proves it is watching the real Zcash network—and it never touches your wallet keys.
+
+## Known limitations
+
+- The live deployment still needs a private hosted Zallet beta.3+ service before public PCZT inspection works end to end.
+- `pczt_inspect` reports creator-recorded metadata and is not equivalent to final extraction or consensus validation.
+- In-memory rate-limit state is not shared between serverless instances.
+- The current mutation view compares decoded values; it does not yet classify every change by severity.
 - Veyrin intentionally cannot sign or broadcast a transaction.
+
+## References
+
+- [Zcash documentation](https://zcash.readthedocs.io/)
+- [QuickNode Zcash documentation](https://www.quicknode.com/docs/zcash)
+- [Zallet RPC documentation](https://zcash.github.io/zallet/rpc/)
+- [Zallet releases](https://github.com/zcash/zallet/releases)
+- [PCZT interoperability vectors](https://github.com/AngryDavee/pczt-interop)
+
+## License
+
+No license has been selected yet. All rights are reserved until the repository owner adds one.
