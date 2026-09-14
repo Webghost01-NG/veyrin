@@ -58,6 +58,17 @@ The network witness is backed by mainnet QuickNode data. The Intent Lab is backe
 
 Both screenshots were captured from the production Next.js build running the real API routes. The network values came from QuickNode mainnet; the PCZT comparison passed through an authenticated Zallet beta.3 instance.
 
+### Production acceptance proof
+
+Verified against [veyrin.vercel.app](https://veyrin.vercel.app) on September 14, 2026:
+
+- `/api/network` returned mainnet data with successful evidence for all four node RPC methods.
+- Both public PCZTs returned `200` through the Vercel gateway and real Zallet `pczt_inspect`; the decoded recipients were `t1HxtgXYTPW2J8Be91HXS77MFgx57qkHrvK` and `t1TMLJ7k2N4Narqk5Fd5uUo82NXSMbKRgCc`.
+- The semantic comparison reported exactly the transparent output `address` and `user_address` changes and rendered **Recipient mutation detected**.
+- The Render edge returned ready health, rejected unauthenticated POST with `401`, and rejected public GET with `403`.
+- Desktop and 390 × 844 mobile browser checks rendered all four live evidence rows and the complete mutation flow. The fixed navigation remained fixed and the mobile page had no horizontal overflow.
+- The [clean-room inspector workflow](https://github.com/Webghost01-NG/veyrin/actions/runs/34883361589/job/104107822434) built the pinned source and passed the real authenticated fixture under a 0.1-CPU, 512-MiB container limit.
+
 ## Sixty-second judge path
 
 No local setup, wallet, or secret is required:
@@ -319,10 +330,11 @@ Malformed JSON, invalid base64, oversized input, missing configuration, timeouts
 The in-memory limiter is intentionally lightweight and instance-local. Production provider limits remain the backstop when traffic spans multiple serverless instances.
 
 The hosted image compiles pinned Zallet beta.3 commit `987382f` with a narrow,
-auditable opt-out for its background proving-key warmer. Veyrin's RPC allowlist
-cannot call prove, extract, sign, or broadcast methods, so generating those keys
-only starves inspection on fractional-CPU hosts. The patch does not modify
-`pczt_inspect`; see `services/zallet-inspector/zallet-keyless.patch`.
+auditable keyless patch. It disables only the background proving-key warmer and
+lets the stateless `pczt_inspect` handler read the same validated network
+parameters from its chain handle instead of waiting for an unrelated wallet DB
+connection. Zallet's PCZT decoder and response construction are unchanged; see
+`services/zallet-inspector/zallet-keyless.patch`.
 
 ## Verification
 
