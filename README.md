@@ -138,7 +138,7 @@ Browser
 
 QuickNode URLs and Zallet credentials remain server-only. They are never returned by an API route or included in the browser bundle.
 
-The hosted inspector also runs an ephemeral two-block Zebra regtest dependency on loopback because Zallet requires chain context to start. It creates only a service-encryption identity and an empty encrypted database. Its startup script never invokes mnemonic generation/import, account creation, address generation, signing, extraction, or broadcast operations.
+The hosted inspector also runs an ephemeral two-block Zebra regtest dependency on loopback because Zallet requires chain context to start. It creates only a service-encryption identity and an empty encrypted database. Its startup script never invokes mnemonic generation/import, account creation, address generation, signing, extraction, or broadcast operations. The pinned keyless patch preserves Zallet's PCZT decoder while sourcing its network parameters directly from the already-validated chain handle, avoiding unrelated wallet-database contention on fractional CPU.
 
 ## Technology choices
 
@@ -306,7 +306,7 @@ Malformed JSON, invalid base64, oversized input, missing configuration, timeouts
 - RPC endpoints and credentials remain in server-only environment variables.
 - The QuickNode endpoint must use HTTPS.
 - Zallet may use HTTP only when its hostname is explicit loopback: `localhost`, `127.0.0.1`, or `::1`.
-- Network calls time out individually after 15 seconds; PCZT inspection allows 240 seconds end to end so a sleeping hosted inspector can wake and finish a CPU-bound decode without fabricating a fallback.
+- Network calls time out individually after 15 seconds; PCZT inspection allows 240 seconds end to end so a sleeping hosted inspector can wake and finish a CPU-bound decode without fabricating a fallback. The private service keeps its internal Zallet and proxy deadlines below that outer limit.
 - PCZT input is base64-validated and length-bounded before forwarding.
 - Public routes have bounded in-memory per-client rate limiting.
 - React renders untrusted inspection values as text; no raw HTML injection is used.

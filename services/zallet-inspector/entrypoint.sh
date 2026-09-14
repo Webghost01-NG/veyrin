@@ -100,7 +100,7 @@ encryption_identity = "/var/lib/veyrin/zallet/identity.txt"
 
 [rpc]
 bind = ["127.0.0.1:28232"]
-timeout = 60
+timeout = 180
 
 [[rpc.auth]]
 user = "$ZALLET_RPC_USER"
@@ -198,7 +198,7 @@ until bash -c 'exec 3<>/dev/tcp/127.0.0.1/28232' 2>/dev/null; do
 done
 
 readiness_pczt="UENaVAEAAAAFis6ctQK0oduWDAEAyI0GhQEAAAEAxJUV9imWJJIzMwGTs9VTxEOo1FgzYwGSJJYp9hWVxAAB/////w8AAACgjQYZdqkUAQAAAAAAAAAAAAAAAAAAAAAAAACIrAAAAQEDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWsgICACIWBgIAIgICAgAgAAAAAAAAAAaCNBhl2qRQBAAAAAAAAAAAAAAAAAAAAAAAAAIisAAABI3QxSHh0Z1hZVFBXMko4QmU5MUhYUzc3TUZneDU3cWtIcnZLAAAAAPvC9DAMAfC3gg0A4zR8jaTuYUZ0N2y8RTWdqlT5tUk+AAADAAGuKTXx39iiSu18cN9946Zo63pJsTGYgN3iu9kDGuXYLwAA"
-readiness_response="$(curl --fail --silent --show-error --connect-timeout 2 --max-time 65 \
+readiness_response="$(curl --fail --silent --show-error --connect-timeout 2 --max-time 185 \
   --user "$ZALLET_RPC_USER:$ZALLET_RPC_PASSWORD" \
   --header 'Content-Type: application/json' \
   --data "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"pczt_inspect\",\"params\":[\"$readiness_pczt\"]}" \

@@ -58,7 +58,7 @@ ENV HOME=/var/lib/veyrin \
 
 EXPOSE 10000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=240s --retries=3 \
   CMD curl --fail --silent http://127.0.0.1:${PORT:-10000}/healthz >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/veyrin-zallet-entrypoint"]

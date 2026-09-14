@@ -16,14 +16,19 @@ loopback inside the container. The public edge binds during initialization so th
 host can discover its port, while `GET /healthz` returns `503` until a real fixture
 passes one long, bounded `pczt_inspect` readiness call. This avoids stacking
 CPU-bound inspections on small hosts. The ready response contains no chain or
-wallet data.
+wallet data. Zallet, nginx, and the readiness probe use one bounded timeout
+budget sized for a fractional-CPU host; the public Vercel gateway retains the
+outer 240-second deadline.
 
 The image builds the pinned upstream Zallet beta.3 commit and applies
-`zallet-keyless.patch`. That patch adds one opt-out around Zallet's background
-Sapling/Orchard proving-key warmer. Veyrin never proves, extracts, or signs, and
-free fractional-CPU hosts otherwise spend minutes warming keys for methods the
-allowlist cannot call. The `pczt_inspect` implementation is unchanged. The
-upstream commit and patch are both visible and reproducible from the Dockerfile.
+`zallet-keyless.patch`. The patch adds one opt-out around Zallet's background
+Sapling/Orchard proving-key warmer and lets the stateless `pczt_inspect` handler
+read the same validated network parameters from its chain handle instead of
+waiting for an unrelated wallet-database connection. Veyrin never proves,
+extracts, or signs, and fractional-CPU hosts therefore spend their budget only
+on the requested inspection. Zallet's PCZT decoding and response construction
+are unchanged. The upstream commit and patch are visible and reproducible from
+the Dockerfile.
 
 ## Local proof
 
