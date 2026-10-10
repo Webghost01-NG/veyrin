@@ -3,6 +3,9 @@ import { writeFile } from "node:fs/promises";
 
 const chromePath = process.env.CHROME_PATH || "/usr/bin/google-chrome";
 const appUrl = process.env.VEYRIN_CAPTURE_URL || "http://127.0.0.1:3000";
+const captureLabOnly = process.env.VEYRIN_CAPTURE_LAB_ONLY === "1";
+const captureMobile = process.env.VEYRIN_CAPTURE_MOBILE === "1";
+const captureFeeScenario = process.env.VEYRIN_CAPTURE_SCENARIO === "fee";
 const debuggingPort = 9333;
 const chrome = spawn(chromePath, [
   "--headless=new",
@@ -11,7 +14,7 @@ const chrome = spawn(chromePath, [
   "--force-prefers-reduced-motion",
   "--window-size=1440,1000",
   `--remote-debugging-port=${debuggingPort}`,
-  "--user-data-dir=/tmp/veyrin-readme-chrome",
+  `--user-data-dir=/tmp/veyrin-readme-chrome-${process.pid}`,
   appUrl
 ], { stdio: "ignore" });
 
@@ -23,7 +26,7 @@ async function browserPage() {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
       const pages = await fetch(`http://127.0.0.1:${debuggingPort}/json`).then((response) => response.json());
-      const page = pages.find((entry) => entry.type === "page");
+      const page = pages.find((entry) => entry.type === "page" && (entry.url === appUrl || entry.url === `${appUrl}/`));
       if (page) return page;
     } catch {}
     await delay(200);
@@ -90,47 +93,64 @@ try {
   await client.ready;
   await client.send("Page.enable");
   await client.send("Runtime.enable");
-  let networkReady = false;
-  for (let refresh = 0; refresh < 3 && !networkReady; refresh += 1) {
-    for (let attempt = 0; attempt < 80; attempt += 1) {
-      const verified = await evaluate(client, `(document.body?.innerText.match(/RESPONSE VERIFIED/g) ?? []).length`);
-      if (verified === 4) {
-        networkReady = true;
-        break;
-      }
-      await delay(250);
-    }
-    if (!networkReady) {
-      await evaluate(client, `document.querySelector('.text-button:not(:disabled)')?.click()`);
-    }
+  if (captureMobile) {
+    await client.send("Emulation.setDeviceMetricsOverride", {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true
+    });
   }
-  if (!networkReady) throw new Error("All four live network methods did not render");
+  if (!captureLabOnly) {
+    let networkReady = false;
+    let observedVerifiedRows = 0;
+    for (let refresh = 0; refresh < 3 && !networkReady; refresh += 1) {
+      for (let attempt = 0; attempt < 80; attempt += 1) {
+        const verified = await evaluate(client, `(document.body?.innerText.match(/RESPONSE VERIFIED/g) ?? []).length`);
+        observedVerifiedRows = verified;
+        if (verified >= 4) {
+          networkReady = true;
+          break;
+        }
+        await delay(250);
+      }
+      if (!networkReady) {
+        await evaluate(client, `document.querySelector('.text-button:not(:disabled)')?.click()`);
+      }
+    }
+    if (!networkReady) throw new Error(`All four live network methods did not render (observed ${observedVerifiedRows})`);
 
-  const networkClip = await evaluate(client, `(() => {
-    const network = document.querySelector('#network');
-    const result = network.getBoundingClientRect();
-    return {
-      x: 0,
-      y: Math.max(0, result.top + window.scrollY),
-      width: document.documentElement.scrollWidth,
-      height: result.height,
-      scale: 1
-    };
-  })()`);
-  await screenshot(client, "/tmp/veyrin-readme-network.png", networkClip);
+    const networkClip = await evaluate(client, `(() => {
+      const network = document.querySelector('#network');
+      const result = network.getBoundingClientRect();
+      return {
+        x: 0,
+        y: Math.max(0, result.top + window.scrollY),
+        width: document.documentElement.scrollWidth,
+        height: result.height,
+        scale: 1
+      };
+    })()`);
+    await screenshot(client, "/tmp/veyrin-readme-network.png", networkClip);
+  }
+
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    if (await evaluate(client, `Boolean(document.querySelector('.attack-row'))`)) break;
+    if (attempt === 79) throw new Error("Attack Lab did not render");
+    await delay(250);
+  }
+  await delay(2_000);
 
   await evaluate(client, `(() => {
-    const mutationButton = document.querySelectorAll('.sample-actions button')[1];
+    const mutationButton = document.querySelectorAll('.attack-row')[${captureFeeScenario ? 1 : 0}];
     mutationButton.click();
     document.querySelector('#lab').scrollIntoView();
     return true;
   })()`);
-  await delay(300);
-  await evaluate(client, `document.querySelector('.primary-action').click()`);
 
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    if (await evaluate(client, `document.body?.innerText.includes('Recipient mutation detected') ?? false`)) break;
-    if (attempt === 79) throw new Error("Mutation result did not render");
+  for (let attempt = 0; attempt < 960; attempt += 1) {
+    if (await evaluate(client, `document.body?.innerText.includes('${captureFeeScenario ? "REVIEW BLOCKED — VALUE OR FEE CHANGED" : "REVIEW BLOCKED — RECIPIENT CHANGED"}') ?? false`)) break;
+    if (attempt === 959) throw new Error("Mutation result did not render");
     await delay(250);
   }
 
@@ -145,8 +165,13 @@ try {
       scale: 1
     };
   })()`);
-  await screenshot(client, "/tmp/veyrin-readme-mutation.png", clip);
-  console.log("Captured live-network and recipient-mutation screenshots.");
+  const mutationPath = captureFeeScenario
+    ? "/tmp/veyrin-readme-fee.png"
+    : captureMobile
+      ? "/tmp/veyrin-readme-mutation-mobile.png"
+      : "/tmp/veyrin-readme-mutation.png";
+  await screenshot(client, mutationPath, clip);
+  console.log(captureFeeScenario ? "Captured fee-escalation screenshot." : captureMobile ? "Captured mobile recipient-mutation screenshot." : captureLabOnly ? "Captured recipient-mutation screenshot." : "Captured live-network and recipient-mutation screenshots.");
 } finally {
   client?.close();
   chrome.kill("SIGTERM");

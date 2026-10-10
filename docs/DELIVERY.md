@@ -27,8 +27,10 @@ Exit: all four calls return current values from the deployed application.
 - Zallet beta.3 compatibility check
 - Keyless `pczt_inspect`
 - Human-readable commitment view
-- Browser-side intent fingerprint
+- Browser-side SHA-256 over decoded PCZT bytes
 - Two-envelope semantic diff
+- One-click recipient-swap and fee-escalation Attack Lab
+- Separate raw-byte, decoded-field, and unverified-intent evidence layers
 
 Exit: an authentic PCZT can be inspected and a changed version produces a deterministic mutation report.
 
@@ -46,11 +48,13 @@ Exit: a judge can open the URL and immediately see live Zcash data, then reprodu
 
 1. Public Vercel `pczt_inspect` returns decoded Zallet data instead of `503`.
 2. The provenance-linked Keystone fixture decodes successfully.
-3. The controlled second PCZT decodes successfully and visibly produces the
-   `Recipient mutation detected` verdict with old/new addresses.
-4. The UI and README state that this is creator-intent review, not signing or
-   final consensus validation.
-5. `npm test`, `npm run typecheck`, and `npm run build` pass.
+3. The controlled recipient PCZT decodes successfully and visibly produces the
+   `REVIEW BLOCKED — RECIPIENT CHANGED` verdict with old/new addresses.
+4. The controlled fee PCZT decodes successfully as a 10,000-zatoshi fee and a
+   90,000-zatoshi output.
+5. The UI and README state that decoder output is not authenticated transaction
+   intent, offline decoding, signing, or final consensus validation.
+6. `npm test`, `npm run typecheck`, and `npm run build` pass.
 
 ## Resource policy
 

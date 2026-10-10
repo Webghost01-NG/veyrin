@@ -2,7 +2,7 @@
 
 > See before you sign.
 
-Veyrin is a keyless safety and review layer for Zcash Partially Created Zcash Transactions (PCZTs). It combines a live Zcash network witness, human-readable PCZT inspection, deterministic intent fingerprints, and before/after mutation detection in one focused application.
+Veyrin is a keyless safety and review layer for Zcash Partially Created Zcash Transactions (PCZTs). It combines a live Zcash network witness, human-readable PCZT inspection, decoded-byte fingerprints, and before/after mutation detection in one focused application.
 
 **Live application:** [https://veyrin.vercel.app](https://veyrin.vercel.app)
 
@@ -18,7 +18,7 @@ Veyrin turns that opaque envelope into reviewable evidence:
 
 1. Observe the real Zcash network and prove the application is connected to a node.
 2. Decode creator-recorded PCZT intent using Zallet's read-only inspection RPC.
-3. Fingerprint the original and returned envelopes in the browser.
+3. Decode the Base64 envelopes and fingerprint their raw PCZT bytes in the browser.
 4. Reveal decoded field changes before anyone supplies signing authority.
 
 This is deliberately a review boundary, not another wallet.
@@ -32,7 +32,7 @@ This is deliberately a review boundary, not another wallet.
 | Use at least 3 RPC methods | Four live node methods, plus one allowlisted Zallet method | Complete |
 | Display live blockchain data | Height, block hash, difficulty, sync, mempool, peers, version, solution rate | Live |
 
-The network witness is backed by mainnet QuickNode data. The Intent Lab is backed by Zallet `v0.1.0-beta.3`; it does not use a mock decoder or hard-coded inspection response.
+The network witness is backed by mainnet QuickNode data. The PCZT lab is backed by Zallet `v0.1.0-beta.3`; it does not use a mock decoder or hard-coded inspection response.
 
 ## What judges can see immediately
 
@@ -42,10 +42,11 @@ The network witness is backed by mainnet QuickNode data. The Intent Lab is backe
 - Current mempool transaction count.
 - A four-method RPC flight recorder with individual success state and latency.
 - A SHA-256 fingerprint of every observed live-network snapshot.
-- An Intent Lab for PCZT inspection and decoded before/after comparison.
+- A one-click PCZT Attack Lab plus manual inspection and comparison tools.
 - A provenance-linked public PCZT test vector containing no wallet key material.
-- A second valid PCZT in which only the transparent recipient metadata changes.
-- A visible `Recipient mutation detected` verdict with the old and new addresses.
+- A valid recipient-swap PCZT and a valid 10,000-zatoshi fee-escalation PCZT.
+- Precise `REVIEW BLOCKED` verdicts with the old and new decoded values.
+- Separate raw-byte evidence, decoded-field evidence, and an explicit `NOT CRYPTOGRAPHICALLY VERIFIED` intent status.
 - A complete, type-preserving semantic diff with both raw Zallet responses available.
 - Honest upstream errors when a service is unavailable; fabricated fallback data is never shown.
 
@@ -53,11 +54,23 @@ The network witness is backed by mainnet QuickNode data. The Intent Lab is backe
 
 ![Veyrin displaying four verified live Zcash RPC responses, current block height, block hash, difficulty, mempool, peers, node version, sync progress, network solution rate, and snapshot fingerprint](docs/screenshots/live-network-witness.png)
 
-### Real recipient-mutation evidence
+### One-click recipient-swap evidence
 
 ![Veyrin comparing two Zallet-decoded public PCZTs and visibly flagging the changed recipient addresses](docs/screenshots/recipient-mutation-detected.png)
 
-Both screenshots were captured from the production Next.js build running the real API routes. The network values came from QuickNode mainnet; the PCZT comparison passed through an authenticated Zallet beta.3 instance.
+[Open the 390 × 844 responsive Attack Lab capture](docs/screenshots/recipient-mutation-mobile.png).
+
+Both screenshots were captured from a production Next.js build running the real API routes. The network values came from QuickNode mainnet; the PCZT comparison passed through a real Zallet beta.3 instance. No decoded response was hard-coded into the UI.
+
+### Pre-call upgrade verification
+
+Verified on the `feat/pczt-attack-lab` branch on October 10, 2026:
+
+- The public Zallet-backed API independently decoded the expected, recipient-swap, and fee-escalation PCZTs with `200` responses.
+- The fee fixture changes only bytes `193..195`, replacing CompactSize `a0 8d 06` (100,000) with `90 bf 05` (90,000). Zallet reported `fee_zat: 10000` and the transparent output as `value_zat: 90000`.
+- The local production build completed the one-click recipient flow through the real public inspector path at desktop and 390 × 844 mobile widths.
+- An unexpected-output fixture is not included because this branch does not yet contain a reproducible second-output PCZT that was independently decoded.
+- This branch has not been deployed or merged; the live URL continues to serve the previously deployed release until explicit approval.
 
 ### Production acceptance proof
 
@@ -70,16 +83,16 @@ Verified against [veyrin.vercel.app](https://veyrin.vercel.app) on September 14,
 - Desktop and 390 × 844 mobile browser checks rendered all four live evidence rows and the complete mutation flow. The fixed navigation remained fixed and the mobile page had no horizontal overflow.
 - The [clean-room inspector workflow](https://github.com/Webghost01-NG/veyrin/actions/runs/34883361589/job/104107822434) built the pinned source and passed the real authenticated fixture under a 0.1-CPU, 512-MiB container limit.
 
-## Sixty-second judge path
+## Sixty-second judge path after deployment
 
 No local setup, wallet, or secret is required:
 
 1. Open [veyrin.vercel.app](https://veyrin.vercel.app).
 2. In **Network Witness**, confirm the four flight-recorder rows say `RESPONSE VERIFIED` and press **Refresh evidence** to produce a new observation and SHA-256 fingerprint.
-3. Open **Intent Lab** and press **Load inspection demo**, then **Reveal transaction intent**. Zallet decodes the bundled public PCZT.
-4. Press **Load recipient mutation**, then **Reveal every mutation**.
-5. Confirm the verdict says **Recipient mutation detected** and shows the expected and returned addresses side by side.
-6. Notice the explicit **NO SIGNING AUTHORITY** boundary: Veyrin reviews creator-recorded intent; it neither signs nor claims final consensus validation.
+3. Open **Attack Lab** and press **Run attack** on **Recipient swap**. One click sends both genuine PCZTs to Zallet.
+4. Confirm **REVIEW BLOCKED — RECIPIENT CHANGED**, two decoded-field changes, two decoded-byte hashes, and both raw inspection responses.
+5. Run **Fee escalation** and confirm the 10,000-zatoshi fee plus 90,000-zatoshi output changes.
+6. Notice the third evidence layer remains **NOT CRYPTOGRAPHICALLY VERIFIED**: Veyrin is a pre-sign review aid, not a signer or final validator.
 
 ## RPC integrations
 
@@ -101,29 +114,41 @@ The browser requests `GET /api/network`. The server calls the four Zcash node me
 
 Each response receives a server-generated SHA-256 snapshot fingerprint over the observation time, height, best block hash, difficulty, mempool count, and network solution rate. The fingerprint is evidence of exactly what this application observed together; it is not a Zcash consensus commitment.
 
-### 2. PCZT Intent Lab
+### 2. PCZT Attack Lab
 
-The Intent Lab has two modes:
+The PCZT lab has three modes:
 
+- **Attack Lab:** Run a genuine expected/returned fixture pair with one click. The included attacks are recipient swap and fee escalation.
 - **Inspect:** Send one base64 PCZT through the allowlisted `pczt_inspect` gateway and surface transaction fields relevant to human review.
-- **Compare mutations:** Inspect an expected envelope and a returned envelope, flatten their decoded structures, and list every field whose value was added, removed, or changed.
+- **Custom compare:** Inspect an expected envelope and a returned envelope, flatten their decoded structures, and list every field whose value was added, removed, or changed.
 
-The browser independently calculates SHA-256 fingerprints of the exact encoded envelopes. Veyrin highlights fee, value, address, recipient, memo, privacy-policy, pool, proof, input, output, and signature-related paths while retaining both complete raw inspection responses for technical review. The semantic diff preserves JSON primitive types and container nodes, including empty arrays and objects, and displays every detected change.
+The browser first decodes each Base64 envelope, then calculates SHA-256 over the resulting PCZT bytes. It also reports exact byte lengths, the number of changed bytes, and the first changed offset. These are raw-envelope facts, not “intent fingerprints.”
+
+Separately, Veyrin compares the two JSON responses returned by Zallet. It highlights fee, value, address, recipient, memo, privacy-policy, pool, proof, input, output, and signature-related paths while retaining both complete responses for technical review. The semantic diff preserves JSON primitive types and container nodes, including empty arrays and objects, and displays every detected change.
+
+The final layer is deliberately a status, not a claim: transaction intent is **not cryptographically verified**. Rule matches can block a review, but Veyrin does not authenticate decoder output, validate signatures or proofs, extract a transaction, apply consensus rules, or verify shielded recipients.
 
 `pczt_inspect` describes metadata contained in the PCZT. It is not final cryptographic or consensus verification, which occurs later in the transaction lifecycle.
 
-### Public vector and controlled mutation
+### Public vector and controlled mutations
 
 The expected envelope comes from [Keystone's public Zcash PCZT transport test](https://github.com/KeystoneHQ/keystone-sdk-base/blob/master/packages/ur-registry-zcash/__tests__/ZcashPCZT.test.ts). It is public test data, not a transaction created from a Veyrin wallet.
 
-The returned envelope is a controlled, still-decodable mutation of that fixture. Its transparent output script and matching creator-recorded `user_address` were changed together. Zallet independently decodes both envelopes; Veyrin does not hard-code the two decoded addresses. The semantic diff then reports exactly these review-relevant paths:
+The recipient-swap envelope is a controlled, still-decodable mutation of that fixture. Its transparent output script and matching creator-recorded `user_address` were changed together. Zallet independently decodes both envelopes; Veyrin does not hard-code the two decoded addresses. The semantic diff then reports exactly these review-relevant paths:
 
 ```text
 transparent / outputs / 0 / address
 transparent / outputs / 0 / user_address
 ```
 
-This proves a meaningful transaction-intent change while keeping all wallet and signing material out of the demonstration.
+The fee-escalation envelope is derived reproducibly from the same expected fixture by replacing the transparent output's three-byte CompactSize value at byte offset 193. Zallet independently reports exactly these changes:
+
+```text
+fee_zat: 0 -> 10000
+transparent / outputs / 0 / value_zat: 100000 -> 90000
+```
+
+These cases demonstrate meaningful decoded-field changes while keeping all wallet and signing material out of the demonstration. They do not prove that either envelope is valid for signing or consensus.
 
 The live dashboard and PCZT inspector use deliberately separate network contexts. Dashboard measurements come from Zcash mainnet. The keyless inspector uses an isolated Zebra regtest chain only to supply the context Zallet requires. Zallet therefore renders decoded transparent scripts with a regtest `tm…` prefix, while a PCZT can also retain creator-recorded mainnet `t1…` user-address metadata. Veyrin shows both, but does not treat that prefix difference alone as tampering; it compares each field against the same field in the other PCZT.
 
@@ -147,7 +172,7 @@ Browser
   |                           `-- pczt_inspect
   |
   `-- Web Crypto API
-         `-- local SHA-256 intent fingerprints
+         `-- local SHA-256 over decoded PCZT bytes
 ```
 
 QuickNode URLs and Zallet credentials remain server-only. They are never returned by an API route or included in the browser bundle.
@@ -181,11 +206,12 @@ app/
   page.tsx                   Landing-page composition
 components/
   NetworkPulse.tsx           Live metrics and RPC flight recorder
-  PcztLab.tsx                PCZT inspection, fingerprints, and semantic diff
+  PcztLab.tsx                One-click attacks, manual inspection, and evidence UI
   SignalField.tsx            Pointer-reactive hero visualization
 lib/
   network.ts                  Concurrent snapshot normalization and failure isolation
-  pczt.ts                     Validation, review-field selection, and deterministic diff
+  pczt.ts                     Byte evidence, verdict rules, and deterministic decoded diff
+  pczt-fixtures.ts            Public expected, recipient, and reproducible fee fixtures
   rate-limit.ts              Bounded in-memory request limiting
   rpc.ts                     URL validation, allowlists, timeouts, RPC client
 services/zallet-inspector/    Keyless Zebra + Zallet + authenticated edge container
@@ -203,7 +229,7 @@ docs/DELIVERY.md             Milestones, phases, and resource policy
 - Node.js 22.x
 - npm
 - A Zcash QuickNode HTTPS endpoint
-- Optional: Zallet `v0.1.0-beta.3` or later for the Intent Lab
+- Optional: Zallet `v0.1.0-beta.3` or later for the PCZT lab
 
 ### Installation
 
@@ -347,7 +373,7 @@ npm run typecheck
 npm run build
 ```
 
-The automated suite currently contains 15 tests covering:
+The automated suite currently contains 20 tests covering:
 
 - Four-method concurrency with successful data preserved during a partial upstream failure.
 - Honest failure when every node RPC call fails.
@@ -359,6 +385,9 @@ The automated suite currently contains 15 tests covering:
 - Deterministic recipient mutation detection, including added, removed, and empty values.
 - Type-preserving diffs for number-to-string changes, missing-to-empty-array changes, and empty-array-to-empty-object changes.
 - Selection of fields that are relevant to human review.
+- SHA-256 over decoded PCZT bytes and exact raw-byte comparison evidence.
+- Reproducibility of the three-byte fee fixture mutation.
+- Attack-fixture validity and precise no-difference, raw-only, review-required, and review-blocked verdict rules.
 
 Manual verification covers:
 
@@ -399,15 +428,18 @@ After deployment, run the [sixty-second judge path](#sixty-second-judge-path) ag
 
 ## Thirty-second pitch
 
-**Technical:** Veyrin is a Next.js safety layer around five allowlisted Zcash RPC methods. Four concurrent node calls create a live chain witness and latency ledger. Zallet's `pczt_inspect` decodes unsigned transaction commitments. Browser-side SHA-256 fingerprints and a semantic diff reveal recipient, value, fee, policy, proof, or signature mutations without accepting private keys.
+**Technical:** Veyrin is a Next.js safety layer around five allowlisted Zcash RPC methods. Four concurrent node calls create a live chain witness. A one-click Attack Lab sends genuine expected and mutated PCZTs to Zallet `pczt_inspect`, hashes decoded PCZT bytes locally, and separately reports byte changes, decoded-field changes, and the intent checks it does not perform.
 
 **Plain language:** A Zcash transaction can move between people before it is signed. Veyrin opens that unsigned envelope, explains what is inside, and warns you if anything changed when it came back. It also proves it is watching the real Zcash network—and it never touches your wallet keys.
 
 ## Known limitations
 
-- `pczt_inspect` reports creator-recorded metadata and is not equivalent to final extraction or consensus validation.
+- `pczt_inspect` reports creator-recorded metadata; Veyrin does not authenticate that output and is not equivalent to final extraction or consensus validation.
+- PCZTs are sent through Veyrin's server gateway to a remote inspector. This is not offline decoding.
+- Shielded recipients, signatures, proofs, and final transaction intent are not verified.
 - In-memory rate-limit state is not shared between serverless instances.
-- The mutation view identifies every decoded field change but only gives the recipient mutation a named verdict; it does not assign financial risk scores.
+- The mutation view applies narrow review-block rules for recipient, value, fee, and output changes; it does not assign financial risk scores.
+- An unexpected-output demo remains blocked until a genuine second-output PCZT can be reproducibly built and independently decoded.
 - The hosted inspector intentionally uses an ephemeral regtest dependency because public fixture inspection does not need mainnet synchronization or persistent wallet state.
 - Veyrin intentionally cannot sign or broadcast a transaction.
 
