@@ -13,6 +13,21 @@ export interface InspectionChange {
   after: JsonValue | undefined;
 }
 
+export interface PcztByteComparison {
+  beforeLength: number;
+  afterLength: number;
+  changedByteCount: number;
+  firstChangedOffset: number | null;
+  identical: boolean;
+}
+
+export interface PcztReviewVerdict {
+  code: "no-difference" | "raw-only" | "review-required" | "review-blocked";
+  label: string;
+  summary: string;
+  matchedRules: string[];
+}
+
 interface ComparableEntry {
   key: string;
   path: string;
@@ -27,6 +42,49 @@ export function validPcztBase64(value: unknown): value is string {
     value.length <= maxPcztLength &&
     value.length % 4 === 0 &&
     /^[A-Za-z0-9+/]+={0,2}$/.test(value);
+}
+
+export function decodePcztBytes(value: string) {
+  const normalized = value.trim();
+  if (!validPcztBase64(normalized)) {
+    throw new Error("Enter a valid base64-encoded PCZT");
+  }
+
+  try {
+    return Uint8Array.from(globalThis.atob(normalized), (character) => character.charCodeAt(0));
+  } catch {
+    throw new Error("Enter a valid base64-encoded PCZT");
+  }
+}
+
+export async function fingerprintPcztBytes(value: string) {
+  const bytes = decodePcztBytes(value);
+  const hash = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export function comparePcztBytes(beforeValue: string, afterValue: string): PcztByteComparison {
+  const before = decodePcztBytes(beforeValue);
+  const after = decodePcztBytes(afterValue);
+  const maximumLength = Math.max(before.length, after.length);
+  let changedByteCount = 0;
+  let firstChangedOffset: number | null = null;
+
+  for (let index = 0; index < maximumLength; index += 1) {
+    if (before[index] === after[index]) continue;
+    changedByteCount += 1;
+    if (firstChangedOffset === null) firstChangedOffset = index;
+  }
+
+  return {
+    beforeLength: before.length,
+    afterLength: after.length,
+    changedByteCount,
+    firstChangedOffset,
+    identical: changedByteCount === 0
+  };
 }
 
 export function flattenJson(value: JsonValue, path: string[] = [], result: Finding[] = []): Finding[] {
@@ -91,4 +149,61 @@ export function diffInspections(beforeValue: JsonValue, afterValue: JsonValue): 
       before: before.get(key)?.value,
       after: after.get(key)?.value
     }));
+}
+
+export function buildPcztReviewVerdict(
+  changes: InspectionChange[],
+  rawBytesChanged: boolean
+): PcztReviewVerdict {
+  const paths = changes.map((entry) => entry.path);
+  const matchedRules = [
+    paths.some((path) => /(address|recipient)/i.test(path)) ? "recipient" : "",
+    paths.some((path) => /(^| \/ )(fee|fee_zat)( \/ |$)/i.test(path)) ? "fee" : "",
+    paths.some((path) => /(^| \/ )(value|value_zat|amount)( \/ |$)/i.test(path)) ? "value" : "",
+    paths.some((path) => /(^| \/ )outputs?( \/ |$)/i.test(path)) ? "output-set" : "",
+    paths.some((path) => /(memo|privacy.*policy)/i.test(path)) ? "policy-or-memo" : ""
+  ].filter(Boolean);
+
+  if (changes.length === 0 && !rawBytesChanged) {
+    return {
+      code: "no-difference",
+      label: "NO DIFFERENCE DETECTED",
+      summary: "The compared bytes and Zallet inspection responses are identical.",
+      matchedRules: []
+    };
+  }
+
+  if (changes.length === 0) {
+    return {
+      code: "raw-only",
+      label: "BYTE CHANGE — NO DECODED FIELD CHANGE",
+      summary: "The envelopes differ, but this decoder reported no field change. Do not treat that as approval.",
+      matchedRules: []
+    };
+  }
+
+  if (matchedRules.includes("recipient")) {
+    return {
+      code: "review-blocked",
+      label: "REVIEW BLOCKED — RECIPIENT CHANGED",
+      summary: "A recipient-related decoded field changed. Stop and confirm the intended recipient in a trusted signing flow.",
+      matchedRules
+    };
+  }
+
+  if (matchedRules.some((rule) => ["fee", "value", "output-set"].includes(rule))) {
+    return {
+      code: "review-blocked",
+      label: "REVIEW BLOCKED — VALUE OR FEE CHANGED",
+      summary: "A decoded amount, fee, or output field changed. Stop and reconcile the transaction economics.",
+      matchedRules
+    };
+  }
+
+  return {
+    code: "review-required",
+    label: "REVIEW REQUIRED — DECODED FIELDS CHANGED",
+    summary: "Zallet reported a decoded-field change that needs human review before signing.",
+    matchedRules
+  };
 }
